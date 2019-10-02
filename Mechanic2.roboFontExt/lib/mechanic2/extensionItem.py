@@ -28,6 +28,9 @@ logger = logging.getLogger("Mechanic")
 
 ICON_URL_CACHE = {}
 EXTENSION_ICON_DID_LOAD_EVENT_KEY = 'com.robofontmechanic.extensionIconDidLoad'
+EXTENSION_DID_CHECK_FOR_UPDATES_EVENT_KEY = 'com.robofontmechanic.extensionDidCheckForUpdates'
+EXTENSION_DID_REMOTE_INSTALL_EVENT_KEY = 'com.robofontmechanic.extensionDidRemoteInstall'
+EXTENSION_DID_UNINSTALL_EVENT_KEY = 'com.robofontmechanic.extensionDidUninstall'
 
 
 class BaseExtensionItem(object):
@@ -38,9 +41,11 @@ class BaseExtensionItem(object):
             raise ExtensionRepoError(report)
         self._data = data
         self._shouldCheckForUpdates = checkForUpdates
-        self._init()
+        self._needsUpdate = False
         self._extensionIcon = None
         self._showMessages = False
+        self._remoteVersion = None
+        self._init()
 
     def _init(self):
         pass
@@ -175,18 +180,7 @@ class BaseExtensionItem(object):
         """
         Return bool if the extension needs an update.
         """
-        if not self._shouldCheckForUpdates:
-            return False
-        # get the version from the repository
-        remoteVersion = self.remoteVersion()
-        if remoteVersion is None:
-            # could be None if it fails
-            return False
-        extensionVersion = self.extensionVersion()
-        if extensionVersion is None:
-            # could be None if it fails
-            return False
-        return extensionVersion < remoteVersion
+        return self._needsUpdate
 
     # download and install
 
@@ -223,6 +217,8 @@ class BaseExtensionItem(object):
             raise ExtensionRepoError(message)
         # remove the temp folder with the extracted zip
         shutil.rmtree(tempFolder)
+        self._needsUpdate = False
+        postEvent(EXTENSION_DID_REMOTE_INSTALL_EVENT_KEY, item=self)
 
     def remoteInstall(self, forcedUpdate=False, showMessages=False):
         """
@@ -318,7 +314,7 @@ class BaseExtensionItem(object):
         self.openUrl(url, background=background)
 
 
-class ExtensionRepository(BaseExtensionItem):
+class ExtensionRepositoryItem(BaseExtensionItem):
 
     validationRequiredKeys = [
         ("repository", str),
@@ -345,8 +341,7 @@ class ExtensionRepository(BaseExtensionItem):
             self._data["extensionName"] = self.extensionPath.split("/")[-1]
 
         self.repositoryParsedURL = urlparse(self.repository)
-        
-        self._remoteVersion = None
+
         if self._shouldCheckForUpdates:
             self.checkForUpdates()
 
@@ -372,7 +367,7 @@ class ExtensionRepository(BaseExtensionItem):
             # cannot get the contents of the info.plist file
             logger.error("Cannot read '%s' for '%s'" % (url, self.extensionName()))
             logger.error(error)
-            return None
+
         try:
             # try to parse the info.plist from string
             # and fail silently with a custom message
@@ -381,21 +376,22 @@ class ExtensionRepository(BaseExtensionItem):
             # cannot parse the plist
             logger.error("Cannot parse '%s' for '%s'" % (url, self.extensionName()))
             logger.error(e)
-            return None
 
-        # get the version
+        # set the version
         self._remoteVersion = info.get("version")
-        # the version must be set
-        if self._remoteVersion is None:
-            return None
-        # return the version from the info
-        return LooseVersion(self._remoteVersion)
+        if self._remoteVersion is not None:
+            # flag the extension as needing an update
+            extensionVersion = self.extensionVersion()
+            if extensionVersion is None:
+                self._needsUpdate = False
+            else:
+                self._needsUpdate = extensionVersion < self._remoteVersion
+
+        postEvent(EXTENSION_DID_CHECK_FOR_UPDATES_EVENT_KEY, item=self)
 
     def checkForUpdates(self):
-        # get the info.plist path
-        path = self.remoteInfoPath()
         urlreader = URLReader(force_https=True)
-        urlreader.fetch(path, self._checkForUpdatesCallback)
+        urlreader.fetch(self.remoteInfoPath(), self._checkForUpdatesCallback)
 
     def remoteZipPath(self):
         """
@@ -438,7 +434,7 @@ class ExtensionRepository(BaseExtensionItem):
         """
         Return the version of the repository, retrieved from the `info.plist`.
         """
-        return self._remoteVersion
+        return LooseVersion(self._remoteVersion)
 
     # helpers
 
@@ -492,6 +488,16 @@ class ExtensionStoreItem(BaseExtensionItem):
     def remoteVersion(self):
         return self._data["version"]
 
+    def checkForUpdates(self):
+        if self.remoteVersion() is not None:
+            # flag the extension as needing an update
+            extensionVersion = self.extensionVersion()
+            if extensionVersion is None:
+                self._needsUpdate = False
+            else:
+                self._needsUpdate = extensionVersion < self.remoteVersion()
+        postEvent(EXTENSION_DID_CHECK_FOR_UPDATES_EVENT_KEY, item=self)
+
     @remember
     def remoteZipPath(self):
         extensionStoreKey = self.extensionStoreKey()
@@ -526,7 +532,7 @@ class ExtensionStoreItem(BaseExtensionItem):
         self.openUrl(url, background=background)
 
 
-class ExtensionYamlItem(ExtensionRepository):
+class ExtensionYamlItem(ExtensionRepositoryItem):
 
     def __init__(self, data, checkForUpdates=True):
         if "tags" in data:

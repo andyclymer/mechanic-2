@@ -81,7 +81,7 @@ class AddURLSheet(BaseWindowController):
 
         data = NSString.alloc().initWithData_encoding_(data, NSUTF8StringEncoding)
         try:
-            _data = json.loads(data.strip())
+            _data = json.loads(data)
             extensionData = _data['extensions']
         except Exception as e:
             self._valid = False
