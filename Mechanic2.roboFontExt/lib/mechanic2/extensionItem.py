@@ -374,11 +374,12 @@ class ExtensionRepositoryItem(BaseExtensionItem):
             info = plistlib.loads(data)
         except Exception as e:
             # cannot parse the plist
+            info = {}
             logger.error("Cannot parse '%s' for '%s'" % (url, self.extensionName()))
             logger.error(e)
 
         # set the version
-        self._remoteVersion = info.get("version")
+        self._remoteVersion = info.get("version", None)
         if self._remoteVersion is not None:
             # flag the extension as needing an update
             extensionVersion = self.extensionVersion()
