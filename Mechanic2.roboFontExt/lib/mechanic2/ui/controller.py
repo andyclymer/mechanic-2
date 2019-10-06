@@ -14,6 +14,7 @@ from mojo.extensions import getExtensionDefault, setExtensionDefault
 
 from defconAppKit.windows.baseWindow import BaseWindowController
 
+from mechanic2 import DefaultURLReader
 from mechanic2.ui.cells import MCExtensionCirleCell, MCImageTextFieldCell
 from mechanic2.ui.formatters import MCExtensionDescriptionFormatter
 from mechanic2.ui.settings import Settings, extensionStoreDataURL
@@ -23,9 +24,6 @@ from mechanic2.extensionItem import EXTENSION_ICON_DID_LOAD_EVENT_KEY
 from mechanic2.extensionItem import EXTENSION_DID_CHECK_FOR_UPDATES_EVENT_KEY
 from mechanic2.extensionItem import EXTENSION_DID_REMOTE_INSTALL_EVENT_KEY
 from mechanic2.extensionItem import EXTENSION_DID_UNINSTALL_EVENT_KEY
-
-
-from urlreader import URLReader
 
 
 logger = logging.getLogger("Mechanic")
@@ -154,6 +152,7 @@ class MechanicController(BaseWindowController):
         if error:
             logger.error("Cannot read url '%s'" % url)
             logger.error("Error '%s'" % error)
+            return
 
         data = NSString.alloc().initWithData_encoding_(data, NSUTF8StringEncoding)
         try:
@@ -258,19 +257,18 @@ class MechanicController(BaseWindowController):
 
         streams = getExtensionDefault("com.mechanic.urlstreams")
         for urlStream in streams:
-            urlreader = URLReader(force_https=True)
             parsedExtensionStoreDataURL = urlparse(extensionStoreDataURL)
             parsedUrlStream = urlparse(urlStream)
             if parsedUrlStream.hostname == parsedExtensionStoreDataURL.hostname:
-                urlreader.fetch(urlStream, self._makeExtensionStoreItems)
+                DefaultURLReader.fetch(urlStream, self._makeExtensionStoreItems)
             else:
-                urlreader.fetch(urlStream, self._makeExtensionRepositories)
+                DefaultURLReader.fetch(urlStream, self._makeExtensionRepositories)
 
     def extensionDidRemoteInstall(self, info):
         self._numExtensionsUpdated += 1
         if self._numExtensionsUpdated < len(self._extensionsToUpdate):
             if self._progress is not None:
-                self.progress.update()
+                self._progress.update()
             return
 
         if self._progress is not None:
