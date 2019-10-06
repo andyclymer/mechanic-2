@@ -270,7 +270,7 @@ class MechanicController(BaseWindowController):
         self._numExtensionsUpdated += 1
         if self._numExtensionsUpdated < len(self._extensionsToUpdate):
             if self._progress is not None:
-                self.progress.update()
+                self._progress.update()
             return
 
         if self._progress is not None:
