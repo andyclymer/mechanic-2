@@ -3,7 +3,7 @@ import objc
 from urllib.parse import urlparse, urlunparse, quote
 
 from Foundation import NSObject, NSMutableData
-from Foundation import NSRunLoop, NSDate
+from Foundation import NSRunLoop, NSDate, NSBundle
 from Foundation import NSFileManager, NSCachesDirectory, NSUserDomainMask
 from Foundation import NSURL, NSURLSession, NSURLSessionConfiguration
 from Foundation import NSURLRequest, NSURLRequestUseProtocolCachePolicy
@@ -144,7 +144,7 @@ class _URLReader(NSObject):
     def setCacheAtPath_(self, path):
         self._cache = NSURLCache.alloc().\
             initWithMemoryCapacity_diskCapacity_diskPath_(
-                0, 20 * 1024 * 1024, path
+                5 * 1024 * 1024, 20 * 1024 * 1024, path
             )
         self._requestCachePolicy = NSURLRequestReturnCacheDataElseLoad
         self.setupSession()
