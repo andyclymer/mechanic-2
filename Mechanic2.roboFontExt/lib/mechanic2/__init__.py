@@ -1,9 +1,9 @@
 from urlreader import URLReader, USER_CACHE_PATH
 
 
-PERSISTENT_CACHE_PATH = USER_CACHE_PATH.\
+OFFLINE_CACHE_PATH = USER_CACHE_PATH.\
     URLByAppendingPathComponent_isDirectory_(
-        'com.robofontmechanic.PersistentCache', True).relativePath()
+        'com.robofontmechanic.OfflineCache', True).relativePath()
 
 
 # Two singletons for URLReaders with slightly different behavior.
@@ -16,4 +16,4 @@ DefaultURLReader = URLReader(force_https=True)
 # An URLReader that caches more aggressively and tries to serve 
 # responses from its own cache first before hitting the remote source.
 CachingURLReader = URLReader(force_https=True, 
-    use_cache=True, cache_location=PERSISTENT_CACHE_PATH)
+    use_cache=True, cache_location=OFFLINE_CACHE_PATH)
