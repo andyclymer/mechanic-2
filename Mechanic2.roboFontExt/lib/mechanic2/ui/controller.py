@@ -274,9 +274,12 @@ class MechanicController(BaseWindowController):
         if self._progress is not None:
             self._progress.close()
             self._progress = None
+
+        self.extensionListSelectionCallback(None)
         self.reloadData()
 
     def extensionDidUninstall(self, info):
+        self.extensionListSelectionCallback(None)
         self.reloadData()
 
     def extensionDidCheckForUpdates(self, info):
