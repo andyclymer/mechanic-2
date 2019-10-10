@@ -17,7 +17,7 @@ from AppKit import NSColor, NSBezierPath
 from mojo.extensions import ExtensionBundle
 from mojo.events import postEvent
 
-from mechanic2 import DefaultURLReader, CachingURLReader
+from mechanic2 import DefaultURLReader, CachingURLReader, URLReaderError
 from mechanic2.mechanicTools import remember, clearRemembered, findExtensionInRoot
 from mechanic2.mechanicTools import ExtensionRepoError
 
@@ -193,6 +193,7 @@ class BaseExtensionItem(object):
             logger.error(message)
             logger.error(e)
             raise ExtensionRepoError(message)
+
         # find the extension path
         extensionPath = findExtensionInRoot(os.path.basename(self.extensionPath), tempFolder)
         if extensionPath:
@@ -205,12 +206,14 @@ class BaseExtensionItem(object):
             message = "Could not find the extension: '%s'" % self.extensionPath
             logger.error(message)
             raise ExtensionRepoError(message)
+
         # remove the temp folder with the extracted zip
         shutil.rmtree(tempFolder)
 
         # clear the cache for this extension icon so it may be reloaded
-        CachingURLReader.invalidate_cache_for_url(self.extensionIconURL())
-        self._extensionIcon = None
+        if self.extensionIconURL():
+            CachingURLReader.invalidate_cache_for_url(self.extensionIconURL())
+            self._extensionIcon = None
 
         self._needsUpdate = False
         postEvent(EXTENSION_DID_REMOTE_INSTALL_EVENT_KEY, item=self)

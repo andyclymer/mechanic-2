@@ -14,7 +14,7 @@ from mojo.extensions import getExtensionDefault, setExtensionDefault
 
 from defconAppKit.windows.baseWindow import BaseWindowController
 
-from mechanic2 import DefaultURLReader
+from mechanic2 import DefaultURLReader, URLReaderError
 from mechanic2.ui.cells import MCExtensionCirleCell, MCImageTextFieldCell
 from mechanic2.ui.formatters import MCExtensionDescriptionFormatter
 from mechanic2.ui.settings import Settings, extensionStoreDataURL
@@ -434,8 +434,9 @@ class MechanicController(BaseWindowController):
     def installCallback(self, sender):
         items = self.getSelection()
         items = [item for item in items if not item.isExtensionFromStore() and not item.isExtensionInstalled()]
-        if not items:
-            return
+        if not items: return
+        self._extensionsToUpdate = items
+        self._numExtensionsUpdated = 0
         self._extensionAction(items=items, message="Installing extensions...", action="remoteInstall")
 
     def uninstallCallback(self, sender):
@@ -456,9 +457,7 @@ class MechanicController(BaseWindowController):
     def updateCallback(self, sender):
         items = self.getSelection()
         items = [item for item in items if item.isExtensionInstalled() and item.extensionNeedsUpdate()]
-        if not items:
-            return
-
+        if not items: return 
         self._extensionsToUpdate = items
         self._numExtensionsUpdated = 0
         self._progress = self.startProgress("Updating extensions...")
@@ -498,7 +497,7 @@ class MechanicController(BaseWindowController):
             try:
                 callback(**kwargs)
             except Exception as e:
-                print("Could not execute: '%s'. \n\n%s" % (action, e))
+                logger.error("Could not execute: '%s'. \n\n%s" % (action, e))
                 foundErrors = True
             if message:
                 progress.update()

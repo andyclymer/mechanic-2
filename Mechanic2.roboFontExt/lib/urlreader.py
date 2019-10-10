@@ -16,12 +16,12 @@ from PyObjCTools.AppHelper import callAfter
 logger = logging.getLogger('URLReader')
 
 
-USER_CACHE_PATH, _ = NSFileManager.defaultManager().\
+USER_CACHE_DIRECTORY_URL, _ = NSFileManager.defaultManager().\
     URLForDirectory_inDomain_appropriateForURL_create_error_(
         NSCachesDirectory, NSUserDomainMask, None, True, None
     )
-CACHE_PATH = USER_CACHE_PATH.\
-    URLByAppendingPathComponent_isDirectory_('URLReader', True).relativePath()
+CACHE_DIRECTORY_URL = USER_CACHE_DIRECTORY_URL.\
+    URLByAppendingPathComponent_isDirectory_('URLReader', True)
 
 
 def callback(url, data, error):
@@ -35,6 +35,10 @@ def callback(url, data, error):
     raise NotImplementedError
 
 
+class URLReaderError(Exception):
+    pass
+
+
 class URLReader(object):
     """A wrapper around macOS’s NSURLSession, etc.
 
@@ -46,7 +50,7 @@ class URLReader(object):
     def __init__(self, timeout=10,
                  quote_url_path=True, force_https=False,
                  use_cache=False,
-                 cache_location=CACHE_PATH,
+                 cache_location=CACHE_DIRECTORY_URL,
                  wait_until_done=False):
 
         self._reader = _URLReader.alloc().init()
@@ -58,8 +62,11 @@ class URLReader(object):
         self._wait_until_done = wait_until_done
 
         if self._use_cache:
-            self._reader.setCacheAtPath_(
-                NSURL.URLWithString_(cache_location))
+            # cast the cache location to an NSURL if it’s a string
+            if isinstance(self._cache_location, str):
+                self._cache_location = \
+                    NSURL.URLWithString_(self._cache_location)
+            self._reader.setCacheAtDirectoryURL_(self._cache_location)
 
     @property
     def done(self):
@@ -85,14 +92,20 @@ class URLReader(object):
         return NSURL.URLWithString_(url)
 
     def set_cache(self, url, data):
+        if url is None:
+            raise URLReaderError('URL must not be None')
         url = self.process_url(url)
         return self._reader.setCachedData_forURL_(data, url)
 
     def get_cache(self, url):
+        if url is None:
+            raise URLReaderError('URL must not be None')
         url = self.process_url(url)
         return self._reader.getCachedDataForURL_(url)
 
     def invalidate_cache_for_url(self, url):
+        if url is None:
+            raise URLReaderError('URL must not be None')
         url = self.process_url(url)
         if self._use_cache:
             self._reader.invalidateCacheForURL_(url)
@@ -106,6 +119,11 @@ class URLReader(object):
             NSDate.dateWithTimeIntervalSinceNow_(0.01))
 
     def fetch(self, url, callback, invalidate_cache=False):
+        if url is None:
+            raise URLReaderError('URL must not be None')
+        if callback is None:
+            raise URLReaderError('Callback must not be None')
+
         url = self.process_url(url)
 
         if invalidate_cache:
@@ -147,19 +165,20 @@ class _URLReader(NSObject):
         self._timeout = timeout
         self.setupSession()
 
-    def setCacheAtPath_(self, path):
+    def setCacheAtDirectoryURL_(self, url):
         self._cache = NSURLCache.alloc()
         memoryCapacity = 5 * 1024 * 1024
         diskCapacity = 20 * 1024 * 1024
 
-        if 'initWithMemoryCapacity_diskCapacity_directoryURL_' in dir(self._cache):
+        if 'initWithMemoryCapacity_diskCapacity_directoryURL_' in \
+                dir(self._cache):
             self._cache.initWithMemoryCapacity_diskCapacity_directoryURL_(
-                memoryCapacity, diskCapacity, path)
+                memoryCapacity, diskCapacity, url)
         else:
             # this API will be deprecated in macOS 10.15 and
             # replaced by the one above
             self._cache.initWithMemoryCapacity_diskCapacity_diskPath_(
-                memoryCapacity, diskCapacity, path.relativePath())
+                memoryCapacity, diskCapacity, url.relativePath())
 
         self._requestCachePolicy = NSURLRequestReturnCacheDataElseLoad
         self.setupSession()
@@ -218,6 +237,7 @@ class _URLReader(NSObject):
                 # the redirects, so a consumer can see it changed
                 response_url = response.URL()
 
+            # callAfter executes on the main thread
             callAfter(callback, response_url, data, error)
             del self._callbacks[url]
         return handler
@@ -225,6 +245,7 @@ class _URLReader(NSObject):
     def fetchURL_withCallback_(self, url, callback):
         cachedData = self.getCachedDataForURL_(url)
         if cachedData:
+            # callAfter executes on the main thread
             callAfter(callback, url, cachedData, None)
             return
 
